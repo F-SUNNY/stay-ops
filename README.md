@@ -33,7 +33,7 @@
    `const firebaseConfig = { apiKey: "...", ... }` 부분을 복사해 이 저장소의 `firebase-config.js` 의 빈 값에 채운다.
 
 ### 2. GitHub Pages 배포
-1. GitHub 에서 새 저장소 `stay-ops` 를 **Private** 로 만든다(README 등 추가하지 않음).
+1. GitHub 에서 새 저장소 `stay-ops` 를 **Public** 으로 만든다(README 등 추가하지 않음). 무료 계정은 공개 저장소만 Pages 를 쓸 수 있다. 저장소에는 화면 코드만 있고 데이터는 없으며, Firebase 설정값은 원래 공개용이다.
 2. PC 에서:
    ```powershell
    cd C:\Users\KOPENS\IdeaProjects\stay-ops
