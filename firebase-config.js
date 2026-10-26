@@ -2,7 +2,7 @@
 // 이 값은 공개돼도 됩니다. 데이터 접근은 firestore.rules 가 막습니다.
 export const firebaseConfig = {
   apiKey: 'AIzaSyCH-pruvinkucvPD_05ILCO9ZrybcrEUw0',
-  authDomain: 'stay-ops-97a5a.firebaseapp.com',
+  authDomain: 'stay-ops-97a5a.web.app',
   projectId: 'stay-ops-97a5a',
   storageBucket: 'stay-ops-97a5a.firebasestorage.app',
   messagingSenderId: '766506499433',

@@ -32,7 +32,16 @@
 7. 프로젝트 개요 옆 **톱니 → 프로젝트 설정 → 일반 → 내 앱 → 웹(</> 아이콘)** → 앱 닉네임 `stay-ops` → 호스팅 체크 안 함 → 앱 등록 →
    `const firebaseConfig = { apiKey: "...", ... }` 부분을 복사해 이 저장소의 `firebase-config.js` 의 빈 값에 채운다.
 
-### 2. GitHub Pages 배포
+### 2. 배포 — Firebase Hosting (권장)
+아이폰 홈 화면 앱에서는 로그인 도메인과 앱 도메인이 같아야 구글 로그인이 유지된다. 그래서 Firebase Hosting 에 올리고 `firebase-config.js` 의 `authDomain` 을 `<프로젝트>.web.app` 으로 둔다.
+```powershell
+npm install -g firebase-tools
+firebase login                      # 브라우저 로그인 1회
+firebase deploy --only hosting      # 수정할 때마다. 주소: https://stay-ops-97a5a.web.app
+```
+`firebase.json` 이 docs/tests/scripts 를 제외하고 나머지 파일을 올린다.
+
+### 2-B. GitHub Pages (대안, 데스크톱·안드로이드 브라우저용)
 1. GitHub 에서 새 저장소 `stay-ops` 를 **Public** 으로 만든다(README 등 추가하지 않음). 무료 계정은 공개 저장소만 Pages 를 쓸 수 있다. 저장소에는 화면 코드만 있고 데이터는 없으며, Firebase 설정값은 원래 공개용이다.
 2. PC 에서:
    ```powershell
