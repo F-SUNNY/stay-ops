@@ -1,7 +1,7 @@
-import * as store from './store.js';
+import * as store from './store.js?v=7';
 import { firebaseConfig } from './firebase-config.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const Calc = window.Calc;
 const PLATFORMS = { '33m2': '삼삼엠투', zbstay: '직방', enko: '엔코' };
 const CATEGORIES = { cleaning: '청소비', supplies: '소모품', repair: '수리', other: '기타' };

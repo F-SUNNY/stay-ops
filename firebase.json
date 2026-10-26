@@ -14,7 +14,8 @@
       "firestore.rules"
     ],
     "headers": [
-      { "source": "sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+      { "source": "**/*.@(html|js|json)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "**/*.@(png|css)", "headers": [{ "key": "Cache-Control", "value": "max-age=86400" }] }
     ]
   }
 }
