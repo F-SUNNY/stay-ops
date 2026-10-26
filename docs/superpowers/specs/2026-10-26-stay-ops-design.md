@@ -58,12 +58,10 @@ platformUrls: { "33m2": url|null, zbstay: url|null, enko: url|null }
 deposit: int
 defaultReceiver: email            예약 수령자 기본값
 shares: { [email]: int }          분배 비율 %, 합 100
-fixedCosts: [ { label, amount, payer: email } ]       월 고정 지출
+fixedCosts: [ { label, amount, payer: email, day: int|null } ]  월 고정 지출. day = 매달 납부일(null 이면 계약 시작일의 일)
 setupCosts: [ { label, amount, payer: email, date } ] 초기 세팅비
-contractStart: "YYYY-MM-DD" | null  임대차 계약 시작일 (입력 시 activeFrom 자동 채움)
-contractEnd: "YYYY-MM-DD" | null    계약 종료일
-activeFrom: "YYYY-MM"             고정 지출 반영 시작 월
-activeTo: "YYYY-MM" | null        종료 월(포함)
+contractStart: "YYYY-MM-DD"       임대차 계약 시작일 (필수)
+contractEnd: "YYYY-MM-DD" | null  계약 종료일(포함). null 이면 계속
 sortOrder: int
 ```
 
@@ -106,7 +104,7 @@ snapshot: calcMonth 결과 전체(아래 계산 참조)
 
 ### 월 귀속
 - 예약 수입: `checkIn` 이 속한 달. 월을 넘어도 쪼개지 않음. `status === "cancelled"` 면 `amount` 그대로 사용(위약금 입력 가능, 없으면 0).
-- 고정 지출: `activeFrom <= 월 <= activeTo(null 이면 무한)` 인 달마다 전액. 일할 없음. 방 `status` 와 무관(종료는 activeTo 로 표현).
+- 고정 지출: **납부일 기준**. 항목마다 매달 `day` 일(없으면 계약 시작일의 일, 달이 짧으면 말일)에 납부가 발생하고, 납부일이 `contractStart <= 날짜 <= contractEnd` 안이면 그 달에 전액 귀속. 일할 없음. 계약 11/7~익년 11/6 이면 월세 12회. 방 `status` 와 무관.
 - 변동 지출: `date` 의 달.
 - 세팅비: 지출에 넣지 않음. 회수율에만 사용.
 
@@ -122,7 +120,7 @@ snapshot: calcMonth 결과 전체(아래 계산 참조)
   transfers: [ { from, to, amount } ]    음수 포지션 → 양수 포지션. 두 명이면 한 건
 }
 ```
-- `rooms` 에는 그 달 활성(activeFrom/To 범위) 이거나 그 달에 예약·지출이 있는 방만 넣는다.
+- `rooms` 에는 그 달 활성(계약 기간이 그 달과 겹침) 이거나 그 달에 예약·지출이 있는 방만 넣는다.
 - `commonCost`: `roomId === null` 인 지출 합을 그 달 활성 방들에 균등 배분(원 단위, 나머지는 sortOrder 첫 방에). 활성 방이 0 이면 공통 지출은 `total.expense` 에만 들어가고, 포지션은 사용자 수로 균등 분담해 낸 사람이 받는다.
 - `net = income - fixedCost - variableCost - commonCost`
 - `shares[u] = round(net × share%/100)`. 반올림 오차는 비율이 가장 큰 사용자(동률이면 이메일 사전순 첫 번째)에게 몰아 합이 `net` 과 같게 한다.
@@ -133,7 +131,7 @@ snapshot: calcMonth 결과 전체(아래 계산 참조)
 - `transfers`: 포지션 음수인 사람이 양수인 사람에게 지급. 그리디(가장 큰 음수 → 가장 큰 양수). 두 명이면 한 건.
 
 ### `recoveryRate(room, {bookings, expenses}, asofMonth) → { setup, cumulativeNet, rate, recoveredMonth }`
-`activeFrom` 부터 `asofMonth` 까지 각 달 `net`(그 방만, 공통 배분 제외) 누적 ÷ `Σ setupCosts.amount`. 세팅비 0 이면 `rate: null`.
+계약 시작월부터 `asofMonth` 까지 각 달 `net`(그 방만, 공통 배분 제외) 누적 ÷ `Σ setupCosts.amount`. 세팅비 0 이면 `rate: null`.
 누적이 처음 세팅비 이상이 된 달을 `recoveredMonth`(없으면 null).
 
 ### `roomStatus(room, bookings, today) → { state, until?, nextCheckIn?, daysUntil? }`
@@ -176,8 +174,8 @@ booked 면 `{ id: booking.id, bookingId: booking.id, roomId, date: checkOut, ass
 - 버튼: 정산 확정(재확정 시 확인 대화상자), CSV 내보내기(그 달 예약·지출 두 표, UTF-8 BOM).
 
 ### 방
-- 목록 + "방 추가". 편집 폼: 이름, 주소, 상태, 플랫폼 URL 3칸, 보증금, 기본 수령자, 운영 시작월/종료월,
-  분배 비율(사용자별 % 입력, 합 100 아니면 저장 불가), 고정 월 지출 목록(항목·금액·부담자, 추가/삭제),
+- 목록 + "방 추가". 편집 폼: 이름, 주소, 상태, 플랫폼 URL 3칸, 보증금, 기본 수령자, 계약 시작일(필수)/종료일,
+  분배 비율(사용자별 % 입력, 합 100 아니면 저장 불가), 고정 월 지출 목록(항목·금액·부담자·납부일, 추가/삭제),
   초기 세팅비 목록(항목·금액·낸 사람·날짜, 추가/삭제). 삭제는 예약·지출이 없을 때만.
 
 ### 설정

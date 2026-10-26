@@ -4,7 +4,7 @@ const C = require('../calc.js');
 
 const A = 'a@x.com', B = 'b@x.com';
 const room = (over) => Object.assign({
-  id: 'r1', name: '방1', status: 'active', activeFrom: '2026-10', activeTo: null, sortOrder: 0,
+  id: 'r1', name: '방1', status: 'active', contractStart: '2026-10-01', contractEnd: null, sortOrder: 0,
   shares: { [A]: 50, [B]: 50 }, defaultReceiver: A, fixedCosts: [], setupCosts: [],
 }, over);
 const booking = (over) => Object.assign({
@@ -19,12 +19,30 @@ test('monthOf / addMonths / daysBetween', () => {
   assert.equal(C.daysBetween('2026-10-10', '2026-10-17'), 7);
 });
 
-test('isActive: activeFrom 이상, activeTo 이하(null 은 무한)', () => {
+test('isActive: 계약 시작월 이상, 종료월 이하(null 은 무한). 옛 activeFrom/To 도 인식', () => {
   assert.equal(C.isActive(room(), '2026-09'), false);
   assert.equal(C.isActive(room(), '2026-10'), true);
   assert.equal(C.isActive(room(), '2030-01'), true);
-  assert.equal(C.isActive(room({ activeTo: '2026-11' }), '2026-11'), true);
-  assert.equal(C.isActive(room({ activeTo: '2026-11' }), '2026-12'), false);
+  assert.equal(C.isActive(room({ contractEnd: '2026-11-06' }), '2026-11'), true);
+  assert.equal(C.isActive(room({ contractEnd: '2026-11-06' }), '2026-12'), false);
+  assert.equal(C.isActive({ activeFrom: '2026-10', activeTo: '2026-11' }, '2026-11'), true);
+  assert.equal(C.isActive({ activeFrom: '2026-10', activeTo: '2026-11' }, '2026-12'), false);
+  assert.equal(C.isActive({}, '2026-12'), false);
+});
+
+test('fixedCostsDue: 납부일 기준. 계약 11/7~익년 11/6 이면 월세 12회, 말일 당김', () => {
+  const rm = room({ contractStart: '2026-11-07', contractEnd: '2027-11-06',
+    fixedCosts: [{ label: '월세', amount: 320000, payer: A }, { label: '관리비', amount: 50000, payer: B, day: 31 }] });
+  assert.deepEqual(C.fixedCostsDue(rm, '2026-10'), []);
+  assert.deepEqual(C.fixedCostsDue(rm, '2026-11').map(c => [c.label, c.date]), [['월세', '2026-11-07'], ['관리비', '2026-11-30']]);
+  assert.deepEqual(C.fixedCostsDue(rm, '2027-02').map(c => c.date), ['2027-02-07', '2027-02-28']);
+  assert.deepEqual(C.fixedCostsDue(rm, '2027-10').map(c => c.date), ['2027-10-07', '2027-10-31']);
+  assert.deepEqual(C.fixedCostsDue(rm, '2027-11'), []);   // 11/7 은 계약 종료(11/6) 뒤
+  let n = 0;
+  for (let m = '2026-11'; m <= '2027-12'; m = C.addMonths(m, 1)) n += C.fixedCostsDue(rm, m).filter(c => c.label === '월세').length;
+  assert.equal(n, 12);
+  // 계약 시작일 전의 납부일은 빠진다
+  assert.deepEqual(C.fixedCostsDue(room({ contractStart: '2026-11-20', fixedCosts: [{ label: 'x', amount: 1, payer: A, day: 7 }] }), '2026-11'), []);
 });
 
 test('roomStatus: 4 상태', () => {
@@ -107,7 +125,7 @@ test('calcMonth: 방 2개(50:50, 70:30), 부담자·수령자 혼합, 포지션 
 
 test('calcMonth: 활성 방 없는 달의 공통 지출은 사용자 수로 분담', () => {
   const users = [{ email: A }, { email: B }];
-  const rooms = [room({ activeFrom: '2026-12' })];
+  const rooms = [room({ contractStart: '2026-12-01' })];
   const expenses = [{ id: 'e', roomId: null, date: '2026-10-01', category: 'supplies', amount: 10000, payer: A }];
   const r = C.calcMonth('2026-10', { rooms, bookings: [], expenses, users });
   assert.deepEqual(r.rooms, []);
@@ -118,7 +136,7 @@ test('calcMonth: 활성 방 없는 달의 공통 지출은 사용자 수로 분�
 
 test('calcMonth: 비활성 방이라도 그 달 예약이 있으면 포함(고정 지출 0)', () => {
   const users = [{ email: A }, { email: B }];
-  const rooms = [room({ activeFrom: '2026-11', fixedCosts: [{ label: '월세', amount: 1, payer: A }] })];
+  const rooms = [room({ contractStart: '2026-11-01', fixedCosts: [{ label: '월세', amount: 1, payer: A }] })];
   const r = C.calcMonth('2026-10', { rooms, bookings: [booking()], expenses: [], users });
   assert.equal(r.rooms.length, 1);
   assert.equal(r.rooms[0].fixedCost, 0);
@@ -135,7 +153,7 @@ test('calcMonth: 3명 transfers 그리디', () => {
 });
 
 test('recoveryRate: 누적 순이익 / 세팅비, 회수월', () => {
-  const rm = room({ activeFrom: '2026-08', fixedCosts: [{ label: '월세', amount: 100000, payer: A }],
+  const rm = room({ contractStart: '2026-08-01', fixedCosts: [{ label: '월세', amount: 100000, payer: A }],
                     setupCosts: [{ label: '가구', amount: 250000, payer: A, date: '2026-07-30' }] });
   const bs = [booking({ id: '1', checkIn: '2026-08-01', checkOut: '2026-08-08', amount: 200000 }),
               booking({ id: '2', checkIn: '2026-09-01', checkOut: '2026-09-08', amount: 200000 }),

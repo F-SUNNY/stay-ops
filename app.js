@@ -304,20 +304,19 @@ function renderRooms() {
 function roomForm(room) {
   const r = room || { name: '', address: '', status: 'active', platformUrls: {}, deposit: 0, defaultReceiver: S.me.email,
     shares: Object.fromEntries(S.users.map((u, i, arr) => [u.email, i === 0 ? 100 - Math.floor(100 / arr.length) * (arr.length - 1) : Math.floor(100 / arr.length)])),
-    fixedCosts: [{ label: '월세', amount: 0, payer: S.me.email }], setupCosts: [], activeFrom: Calc.monthOf(today()), activeTo: null, contractStart: '', contractEnd: '' };
+    fixedCosts: [{ label: '월세', amount: 0, payer: S.me.email, day: null }], setupCosts: [], contractStart: today(), contractEnd: '' };
   const used = room && (S.bookings.some(b => b.roomId === room.id) || S.expenses.some(e => e.roomId === room.id));
-  const costRow = (c, four) => `<div class="r ${four ? 'four' : ''}"><input placeholder="항목" value="${esc(c.label)}" data-k="label"><input data-amt inputmode="numeric" placeholder="금액" value="${c.amount || ''}" data-k="amount"><select data-k="payer">${userOptions(c.payer)}</select>${four ? `<input type="date" value="${esc(c.date || '')}" data-k="date">` : ''}<button type="button" class="x" data-rm>×</button></div>`;
+  const costRow = (c, kind) => `<div class="r four"><input placeholder="항목" value="${esc(c.label)}" data-k="label"><input data-amt inputmode="numeric" placeholder="금액" value="${c.amount || ''}" data-k="amount"><select data-k="payer">${userOptions(c.payer)}</select>${kind === 'setup' ? `<input type="date" value="${esc(c.date || '')}" data-k="date">` : `<input type="number" min="1" max="31" inputmode="numeric" placeholder="납부일" value="${c.day || ''}" data-k="day" title="매달 납부일 (비우면 계약 시작일의 일)">`}<button type="button" class="x" data-rm>×</button></div>`;
   sheet(`<h3>${room ? '방 설정' : '방 추가'}</h3>
     <form id="room-form">
       <div class="f"><label>이름</label><input name="name" required value="${esc(r.name)}" placeholder="예: 내외동 203호"></div>
       <div class="f"><label>주소</label><input name="address" value="${esc(r.address || '')}"></div>
       <div class="f"><label>상태</label>${radios('status', ROOM_STATUS, r.status)}</div>
-      <div class="f two"><div><label>계약 시작일</label><input type="date" name="contractStart" value="${esc(r.contractStart || '')}"></div><div><label>계약 종료일</label><input type="date" name="contractEnd" value="${esc(r.contractEnd || '')}"></div></div>
-      <div class="f two"><div><label>운영 시작월</label><input type="month" name="activeFrom" required value="${esc(r.activeFrom || '')}"></div><div><label>종료월 (비우면 계속)</label><input type="month" name="activeTo" value="${esc(r.activeTo || '')}"></div></div>
+      <div class="f two"><div><label>계약 시작일</label><input type="date" name="contractStart" required value="${esc(r.contractStart || (r.activeFrom ? r.activeFrom + '-01' : ''))}"></div><div><label>계약 종료일 (비우면 계속)</label><input type="date" name="contractEnd" value="${esc(r.contractEnd || '')}"></div></div>
       <div class="f two"><div><label>보증금</label><input data-amt inputmode="numeric" name="deposit" value="${r.deposit || ''}"></div><div><label>기본 수령자</label><select name="defaultReceiver">${userOptions(r.defaultReceiver)}</select></div></div>
       <div class="f"><label>분배 비율 (합 100%)</label><div class="shares" id="shares">${S.users.map(u => `<label>${esc(userName(u.email))}<div class="unit"><input type="number" min="0" max="100" inputmode="numeric" data-share="${esc(u.email)}" value="${(r.shares || {})[u.email] ?? 0}"><span>%</span></div></label>`).join('')}</div><div class="err" id="share-err"></div></div>
-      <div class="f"><label>고정 월 지출 (항목 · 금액 · 부담자)</label><div class="rows" id="fixed">${(r.fixedCosts || []).map(c => costRow(c)).join('')}</div><button type="button" class="btn sm ghost" data-add="fixed">+ 항목 추가</button></div>
-      <div class="f"><label>초기 세팅비 (항목 · 금액 · 낸 사람 · 날짜)</label><div class="rows" id="setup">${(r.setupCosts || []).map(c => costRow(c, true)).join('')}</div><button type="button" class="btn sm ghost" data-add="setup">+ 항목 추가</button></div>
+      <div class="f"><label>고정 월 지출 (항목 · 금액 · 부담자 · 매달 납부일)</label><div class="rows" id="fixed">${(r.fixedCosts || []).map(c => costRow(c, 'fixed')).join('')}</div><button type="button" class="btn sm ghost" data-add="fixed">+ 항목 추가</button></div>
+      <div class="f"><label>초기 세팅비 (항목 · 금액 · 낸 사람 · 날짜)</label><div class="rows" id="setup">${(r.setupCosts || []).map(c => costRow(c, 'setup')).join('')}</div><button type="button" class="btn sm ghost" data-add="setup">+ 항목 추가</button></div>
       <div class="f"><label>플랫폼 매물 주소</label>${Object.entries(PLATFORMS).map(([k, v]) => `<input style="margin-top:6px" name="url_${k}" placeholder="${v} URL" value="${esc((r.platformUrls || {})[k] || '')}">`).join('')}</div>
       <div class="btns"><button type="submit" class="btn primary" id="room-save">저장</button>${room && !used ? `<button type="button" class="btn danger" data-act="delete-room" data-id="${room.id}">삭제</button>` : ''}</div>
       ${room && used ? '<p class="muted" style="margin:8px 0 0">예약·지출이 있는 방은 삭제할 수 없어요. 상태를 종료로 바꾸세요.</p>' : ''}
@@ -329,28 +328,27 @@ function roomForm(room) {
       form.querySelector('#room-save').disabled = total !== 100;
     };
     form.addEventListener('input', checkShares); checkShares();
-    form.querySelector('[name=contractStart]').addEventListener('change', (e) => { if (e.target.value) form.querySelector('[name=activeFrom]').value = Calc.monthOf(e.target.value); });
     form.addEventListener('click', (e) => {
       const add = e.target.closest('[data-add]');
-      if (add) { const box = form.querySelector('#' + add.dataset.add); box.insertAdjacentHTML('beforeend', costRow({ label: '', amount: 0, payer: S.me.email, date: today() }, add.dataset.add === 'setup')); bindAmountInputs(box); }
+      if (add) { const box = form.querySelector('#' + add.dataset.add); box.insertAdjacentHTML('beforeend', costRow({ label: '', amount: 0, payer: S.me.email, date: today(), day: null }, add.dataset.add)); bindAmountInputs(box); }
       if (e.target.closest('[data-rm]')) e.target.closest('.r').remove();
     });
     bindAmountInputs(form);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(form);
-      const rows = (id, four) => [...form.querySelectorAll(`#${id} .r`)].map(row => {
+      const rows = (id) => [...form.querySelectorAll(`#${id} .r`)].map(row => {
         const g = (k) => row.querySelector(`[data-k="${k}"]`);
         const o = { label: g('label').value.trim(), amount: parseAmt(g('amount').value), payer: g('payer').value };
-        if (four) o.date = g('date').value || today();
+        if (id === 'setup') o.date = g('date').value || today();
+        else o.day = Number(g('day').value) || null;
         return o;
       }).filter(c => c.label || c.amount);
       const data = {
         name: fd.get('name').trim(), address: fd.get('address').trim(), status: fd.get('status'),
-        contractStart: fd.get('contractStart') || null, contractEnd: fd.get('contractEnd') || null,
-        activeFrom: fd.get('activeFrom'), activeTo: fd.get('activeTo') || null, deposit: parseAmt(fd.get('deposit')), defaultReceiver: fd.get('defaultReceiver'),
+        contractStart: fd.get('contractStart'), contractEnd: fd.get('contractEnd') || null, deposit: parseAmt(fd.get('deposit')), defaultReceiver: fd.get('defaultReceiver'),
         shares: Object.fromEntries([...form.querySelectorAll('[data-share]')].map(i => [i.dataset.share, Number(i.value) || 0])),
-        fixedCosts: rows('fixed'), setupCosts: rows('setup', true),
+        fixedCosts: rows('fixed'), setupCosts: rows('setup'),
         platformUrls: Object.fromEntries(Object.keys(PLATFORMS).map(k => [k, fd.get('url_' + k).trim() || null])),
         sortOrder: room ? (room.sortOrder || 0) : S.rooms.reduce((m, x) => Math.max(m, (x.sortOrder || 0) + 1), 0),
       };

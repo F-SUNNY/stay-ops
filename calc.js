@@ -17,7 +17,25 @@
     const d = new Date(Date.UTC(...ymd(date)) + n * 86400000);
     return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
   }
-  function isActive(room, month) { return room.activeFrom <= month && (room.activeTo == null || month <= room.activeTo); }
+  function lastDay(month) { const [y, m] = month.split('-').map(Number); return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+  // 계약 기간. 옛 문서(activeFrom/activeTo 월) 도 받아 준다
+  function contractRange(room) {
+    const start = room.contractStart || (room.activeFrom ? `${room.activeFrom}-01` : null);
+    const end = room.contractEnd || (room.activeTo ? `${room.activeTo}-${pad2(lastDay(room.activeTo))}` : null);
+    return { start, end };
+  }
+  function isActive(room, month) {
+    const { start, end } = contractRange(room);
+    return !!start && monthOf(start) <= month && (end == null || month <= monthOf(end));
+  }
+  // 그 달에 납부일이 돌아오는 고정 지출. 납부일이 없는 항목은 계약 시작일의 '일' 을 쓰고, 달이 짧으면 말일로 당긴다
+  function fixedCostsDue(room, month) {
+    const { start, end } = contractRange(room);
+    if (!start) return [];
+    const defaultDay = Number(start.slice(8, 10));
+    return (room.fixedCosts || []).map(c => ({ ...c, date: `${month}-${pad2(Math.min(c.day || defaultDay, lastDay(month)))}` }))
+      .filter(c => c.date >= start && (end == null || c.date <= end));
+  }
 
   const booked = (bs) => bs.filter(b => b.status === 'booked');
 
@@ -52,7 +70,7 @@
     const es = expenses.filter(e => e.roomId === room.id && monthOf(e.date) === month);
     return {
       income: sum(bs, b => b.amount || 0), bookingCount: bs.length,
-      fixedCost: isActive(room, month) ? sum(room.fixedCosts || [], c => c.amount) : 0,
+      fixedCost: sum(fixedCostsDue(room, month), c => c.amount),
       variableCost: sum(es, e => e.amount),
     };
   }
@@ -106,7 +124,7 @@
       const net = rm.income - rm.fixedCost - rm.variableCost - commonCost;
       const shares = splitByShares(net, r.shares || {}, emails);
       const paid = zeros(emails), received = zeros(emails), position = zeros(emails);
-      if (isActive(r, month)) for (const c of r.fixedCosts || []) paid[c.payer] = (paid[c.payer] || 0) + c.amount;
+      for (const c of fixedCostsDue(r, month)) paid[c.payer] = (paid[c.payer] || 0) + c.amount;
       for (const e of expenses) if (e.roomId === r.id && monthOf(e.date) === month) paid[e.payer] = (paid[e.payer] || 0) + e.amount;
       if (commonCost && commonTotal) {
         // 공통 지출 중 u 가 낸 금액 × (이 방 배분액 / 공통 합). 나머지는 가장 많이 낸 사람에게
@@ -136,7 +154,8 @@
   function recoveryRate(room, { bookings, expenses }, asofMonth) {
     const setup = sum(room.setupCosts || [], c => c.amount);
     let cumulativeNet = 0, recoveredMonth = null;
-    for (let m = room.activeFrom; m && m <= asofMonth; m = addMonths(m, 1)) {
+    const { start } = contractRange(room);
+    for (let m = start && monthOf(start); m && m <= asofMonth; m = addMonths(m, 1)) {
       const rm = roomMonth(room, m, { bookings, expenses });
       cumulativeNet += rm.income - rm.fixedCost - rm.variableCost;
       if (setup > 0 && recoveredMonth == null && cumulativeNet >= setup) recoveredMonth = m;
@@ -144,8 +163,8 @@
     return { setup, cumulativeNet, rate: setup > 0 ? cumulativeNet / setup : null, recoveredMonth };
   }
 
-  const api = { monthOf, addMonths, daysBetween, addDays, isActive, roomStatus, todayTasks, overlaps, cleaningFor,
-    roomMonth, calcMonth, recoveryRate };
+  const api = { monthOf, addMonths, daysBetween, addDays, lastDay, contractRange, isActive, fixedCostsDue, roomStatus, todayTasks,
+    overlaps, cleaningFor, roomMonth, calcMonth, recoveryRate };
   root.Calc = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
