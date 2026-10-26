@@ -60,6 +60,8 @@ defaultReceiver: email            예약 수령자 기본값
 shares: { [email]: int }          분배 비율 %, 합 100
 fixedCosts: [ { label, amount, payer: email } ]       월 고정 지출
 setupCosts: [ { label, amount, payer: email, date } ] 초기 세팅비
+contractStart: "YYYY-MM-DD" | null  임대차 계약 시작일 (입력 시 activeFrom 자동 채움)
+contractEnd: "YYYY-MM-DD" | null    계약 종료일
 activeFrom: "YYYY-MM"             고정 지출 반영 시작 월
 activeTo: "YYYY-MM" | null        종료 월(포함)
 sortOrder: int

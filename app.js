@@ -118,7 +118,7 @@ function renderRoomDetail() {
   const es = S.expenses.filter(e => e.roomId === r.id).sort((a, b) => (a.date < b.date ? 1 : -1));
   return `
     <button class="back" data-act="back-home">‹ 홈</button>
-    <div class="card"><div class="row"><div><b style="font-size:18px">${esc(r.name)}</b><div class="muted">${esc(r.address || '')}</div></div><button class="btn sm" data-act="edit-room" data-id="${r.id}">설정</button></div>
+    <div class="card"><div class="row"><div><b style="font-size:18px">${esc(r.name)}</b><div class="muted">${esc(r.address || '')}</div>${r.contractStart ? `<div class="muted">계약 ${r.contractStart.replace(/-/g, '.')} ~ ${(r.contractEnd || '').replace(/-/g, '.') || '미정'}</div>` : ''}</div><button class="btn sm" data-act="edit-room" data-id="${r.id}">설정</button></div>
       <div style="margin-top:8px">${statusText(r)}</div>
       <div class="btns"><button class="btn primary" data-act="add-booking" data-room="${r.id}">예약 추가</button><button class="btn" data-act="add-expense" data-room="${r.id}">지출 추가</button></div></div>
     <div class="card list"><h2>예약 ${bs.length}건</h2>${bs.length ? bs.map(b => bookingItem(b)).join('') : '<div class="empty">예약이 없어요</div>'}</div>
@@ -294,6 +294,7 @@ function renderRooms() {
   return `${rooms.map(r => `<div class="card tap" data-act="edit-room" data-id="${r.id}"><div class="row"><div>
       <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:${roomColor(r)}"></span><b style="font-size:16px">${esc(r.name)}</b> <span class="badge ${r.status === 'active' ? 'green' : 'gray'}">${ROOM_STATUS[r.status]}</span></div>
       <div class="muted" style="margin-top:4px">${esc(r.address || '주소 없음')}</div>
+      ${r.contractStart ? `<div class="muted">계약 ${r.contractStart.replace(/-/g, '.')} ~ ${(r.contractEnd || '').replace(/-/g, '.') || '미정'}</div>` : ''}
       <div class="muted">비율 ${Object.entries(r.shares || {}).map(([e, p]) => `${esc(userName(e))} ${p}%`).join(' · ')} · 고정 월 ${won((r.fixedCosts || []).reduce((s, c) => s + c.amount, 0))}</div>
     </div><span class="muted">›</span></div></div>`).join('')}
     ${rooms.length ? '' : '<div class="card"><div class="empty">첫 방을 추가해 보세요</div></div>'}
@@ -303,7 +304,7 @@ function renderRooms() {
 function roomForm(room) {
   const r = room || { name: '', address: '', status: 'active', platformUrls: {}, deposit: 0, defaultReceiver: S.me.email,
     shares: Object.fromEntries(S.users.map((u, i, arr) => [u.email, i === 0 ? 100 - Math.floor(100 / arr.length) * (arr.length - 1) : Math.floor(100 / arr.length)])),
-    fixedCosts: [{ label: '월세', amount: 0, payer: S.me.email }], setupCosts: [], activeFrom: Calc.monthOf(today()), activeTo: null };
+    fixedCosts: [{ label: '월세', amount: 0, payer: S.me.email }], setupCosts: [], activeFrom: Calc.monthOf(today()), activeTo: null, contractStart: '', contractEnd: '' };
   const used = room && (S.bookings.some(b => b.roomId === room.id) || S.expenses.some(e => e.roomId === room.id));
   const costRow = (c, four) => `<div class="r ${four ? 'four' : ''}"><input placeholder="항목" value="${esc(c.label)}" data-k="label"><input data-amt inputmode="numeric" placeholder="금액" value="${c.amount || ''}" data-k="amount"><select data-k="payer">${userOptions(c.payer)}</select>${four ? `<input type="date" value="${esc(c.date || '')}" data-k="date">` : ''}<button type="button" class="x" data-rm>×</button></div>`;
   sheet(`<h3>${room ? '방 설정' : '방 추가'}</h3>
@@ -311,6 +312,7 @@ function roomForm(room) {
       <div class="f"><label>이름</label><input name="name" required value="${esc(r.name)}" placeholder="예: 내외동 203호"></div>
       <div class="f"><label>주소</label><input name="address" value="${esc(r.address || '')}"></div>
       <div class="f"><label>상태</label>${radios('status', ROOM_STATUS, r.status)}</div>
+      <div class="f two"><div><label>계약 시작일</label><input type="date" name="contractStart" value="${esc(r.contractStart || '')}"></div><div><label>계약 종료일</label><input type="date" name="contractEnd" value="${esc(r.contractEnd || '')}"></div></div>
       <div class="f two"><div><label>운영 시작월</label><input type="month" name="activeFrom" required value="${esc(r.activeFrom || '')}"></div><div><label>종료월 (비우면 계속)</label><input type="month" name="activeTo" value="${esc(r.activeTo || '')}"></div></div>
       <div class="f two"><div><label>보증금</label><input data-amt inputmode="numeric" name="deposit" value="${r.deposit || ''}"></div><div><label>기본 수령자</label><select name="defaultReceiver">${userOptions(r.defaultReceiver)}</select></div></div>
       <div class="f"><label>분배 비율 (합 100%)</label><div class="shares" id="shares">${S.users.map(u => `<label>${esc(userName(u.email))}<div class="unit"><input type="number" min="0" max="100" inputmode="numeric" data-share="${esc(u.email)}" value="${(r.shares || {})[u.email] ?? 0}"><span>%</span></div></label>`).join('')}</div><div class="err" id="share-err"></div></div>
@@ -327,6 +329,7 @@ function roomForm(room) {
       form.querySelector('#room-save').disabled = total !== 100;
     };
     form.addEventListener('input', checkShares); checkShares();
+    form.querySelector('[name=contractStart]').addEventListener('change', (e) => { if (e.target.value) form.querySelector('[name=activeFrom]').value = Calc.monthOf(e.target.value); });
     form.addEventListener('click', (e) => {
       const add = e.target.closest('[data-add]');
       if (add) { const box = form.querySelector('#' + add.dataset.add); box.insertAdjacentHTML('beforeend', costRow({ label: '', amount: 0, payer: S.me.email, date: today() }, add.dataset.add === 'setup')); bindAmountInputs(box); }
@@ -344,6 +347,7 @@ function roomForm(room) {
       }).filter(c => c.label || c.amount);
       const data = {
         name: fd.get('name').trim(), address: fd.get('address').trim(), status: fd.get('status'),
+        contractStart: fd.get('contractStart') || null, contractEnd: fd.get('contractEnd') || null,
         activeFrom: fd.get('activeFrom'), activeTo: fd.get('activeTo') || null, deposit: parseAmt(fd.get('deposit')), defaultReceiver: fd.get('defaultReceiver'),
         shares: Object.fromEntries([...form.querySelectorAll('[data-share]')].map(i => [i.dataset.share, Number(i.value) || 0])),
         fixedCosts: rows('fixed'), setupCosts: rows('setup', true),
