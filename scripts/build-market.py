@@ -1,9 +1,11 @@
 """stay-market-scan 집계(listings.json, dong_metrics.json)에서 김해·창원 매물과 동별 예약 지표만 추려 market.json 을 만든다.
-사용: python scripts/build-market.py <stay-market-scan 경로>"""
+사용: python scripts/build-market.py <stay-market-scan 경로 또는 listings.json 이 있는 집계 폴더>"""
 import json, sys
 from pathlib import Path
 
-src = Path(sys.argv[1]) / "data" / "agg"
+src = Path(sys.argv[1])
+if not (src / "listings.json").exists():
+    src = src / "data" / "agg"
 out = Path(__file__).resolve().parent.parent / "market.json"
 listings = json.load(open(src / "listings.json", encoding="utf-8"))
 metrics = json.load(open(src / "dong_metrics.json", encoding="utf-8"))
