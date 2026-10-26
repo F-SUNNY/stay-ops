@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>스테이 운영</title>
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="스테이">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #f2f4f6; --card: #ffffff; --fg: #191f28; --sub: #4e5968; --muted: #8b95a1; --line: #e5e8eb; --soft: #f9fafb;
+    --accent: #3182f6; --accent-bg: #e8f3ff; --red: #f04452; --red-bg: #ffeeee; --green: #06b36a; --green-bg: #e9f8f0;
+    --orange: #ff8a00; --orange-bg: #fff4e6;
+    --shadow: 0 1px 2px rgba(0,0,0,.03), 0 8px 24px rgba(0,0,0,.04);
+    --tabs-h: 60px; --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg); }
+  body { font: 15px/1.5 Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; overscroll-behavior-y: none; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; padding: 0; }
+  [hidden] { display: none !important; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* 로그인 */
+  #login { min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+  .login-card { background: var(--card); border-radius: 24px; box-shadow: var(--shadow); padding: 36px 28px; width: 100%; max-width: 360px; text-align: center; }
+  .login-card h1 { font-size: 24px; font-weight: 800; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .login-card p { color: var(--sub); margin: 0 0 20px; }
+  .login-card .icon-big { width: 72px; height: 72px; border-radius: 20px; margin: 0 auto 16px; display: block; }
+
+  /* 앱 셸 */
+  #app { max-width: 640px; margin: 0 auto; min-height: 100dvh; }
+  header.top { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: calc(14px + var(--sat)) 20px 10px; display: flex; align-items: center; justify-content: space-between; }
+  header.top h1 { font-size: 24px; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+  header.top .icon { width: 36px; height: 36px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); font-size: 18px; color: var(--sub); }
+  main { padding: 4px 16px calc(var(--tabs-h) + var(--sab) + 90px); }
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; height: calc(var(--tabs-h) + var(--sab)); padding-bottom: var(--sab);
+    background: var(--card); border-top: 1px solid var(--line); display: flex; justify-content: center; }
+  nav.tabs button { flex: 1; max-width: 160px; font-size: 12px; font-weight: 600; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 3px; padding-top: 8px; }
+  nav.tabs button svg { width: 24px; height: 24px; }
+  nav.tabs button.on { color: var(--accent); }
+  .fab { position: fixed; right: max(16px, calc(50% - 320px + 16px)); bottom: calc(var(--tabs-h) + var(--sab) + 16px); z-index: 6;
+    width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 30px; line-height: 56px; text-align: center; box-shadow: 0 8px 20px rgba(49,130,246,.35); }
+
+  /* 카드 */
+  .card { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 18px 20px; margin-top: 12px; }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; color: var(--muted); }
+  .card.tap { cursor: pointer; }
+  .card.tap:active { transform: scale(.99); }
+  .hero small { display: block; color: var(--muted); font-size: 13px; }
+  .hero b { display: block; font-size: 34px; font-weight: 800; letter-spacing: -0.03em; margin: 2px 0 4px; }
+  .hero p { margin: 0; color: var(--sub); font-size: 14px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .row + .row { margin-top: 8px; }
+  .list .item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .list .item:first-child { border-top: 0; padding-top: 2px; }
+  .list .item:last-child { padding-bottom: 2px; }
+  .item .main { flex: 1; min-width: 0; }
+  .item .main b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .main > span { display: block; color: var(--muted); font-size: 13px; }
+  .item .right { text-align: right; font-weight: 700; white-space: nowrap; }
+  .item .right span { display: block; color: var(--muted); font-size: 12px; font-weight: 500; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 12px; font-weight: 600; vertical-align: 1px; }
+  .badge.blue { background: var(--accent-bg); color: var(--accent); }
+  .badge.green { background: var(--green-bg); color: var(--green); }
+  .badge.red { background: var(--red-bg); color: var(--red); }
+  .badge.gray { background: var(--bg); color: var(--sub); }
+  .badge.orange { background: var(--orange-bg); color: var(--orange); }
+  .empty { text-align: center; color: var(--muted); padding: 28px 0; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kpi { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 12px 10px; min-width: 0; }
+  .kpi small { display: block; color: var(--muted); font-size: 12px; }
+  .kpi b { display: block; font-size: 14.5px; font-weight: 800; letter-spacing: -0.03em; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .check { width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--line); display: grid; place-items: center; flex: none; color: #fff; font-size: 14px; }
+  .check.on { background: var(--accent); border-color: var(--accent); }
+  .done { text-decoration: line-through; color: var(--muted); }
+  .bar { height: 8px; border-radius: 4px; background: var(--bg); overflow: hidden; margin-top: 6px; }
+  .bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+  .bar i.full { background: var(--green); }
+  details summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 14px; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+  table.t th { color: var(--muted); font-weight: 500; text-align: right; padding: 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.t td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  table.t th:first-child, table.t td:first-child { text-align: left; }
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .transfer { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 2px 0; }
+  .transfer .arrow { color: var(--muted); font-weight: 500; margin: 0 8px; }
+
+  /* 버튼 */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 16px; border-radius: 14px; font-weight: 700; font-size: 15px; background: var(--bg); color: var(--fg); }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.danger { background: var(--red-bg); color: var(--red); }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .btn.block { width: 100%; }
+  .btn.sm { padding: 8px 12px; font-size: 13px; border-radius: 10px; }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btns { display: flex; gap: 8px; margin-top: 14px; }
+  .btns .btn { flex: 1; }
+  .nav-month { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 8px; }
+  .nav-month b { font-size: 17px; min-width: 120px; text-align: center; }
+  .nav-month button { width: 36px; height: 36px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); font-size: 16px; color: var(--sub); }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 2px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; padding: 6px 12px; border-radius: 999px; background: var(--card); box-shadow: var(--shadow); font-size: 13px; font-weight: 600; color: var(--sub); white-space: nowrap; }
+  .chip.on { background: var(--fg); color: #fff; }
+  .seg { display: inline-flex; background: var(--line); border-radius: 10px; padding: 3px; }
+  .seg button { padding: 5px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); }
+  .seg button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+  .back { font-size: 15px; color: var(--accent); font-weight: 600; margin: 8px 0 0; display: inline-block; }
+
+  /* 폼 */
+  .f { margin-top: 14px; }
+  .f label { display: block; font-size: 13px; color: var(--sub); margin-bottom: 6px; font-weight: 500; }
+  .f input, .f select, .f textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); outline: none; -webkit-appearance: none; appearance: none; font-size: 16px; }
+  .f input:focus, .f select:focus, .f textarea:focus { border-color: var(--accent); background: var(--card); }
+  .f textarea { min-height: 72px; resize: vertical; }
+  .f .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .f .err { color: var(--red); font-size: 12.5px; margin-top: 6px; }
+  .radios { display: flex; gap: 8px; flex-wrap: wrap; }
+  .radios label { margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--bg); font-size: 14px; font-weight: 600; color: var(--sub); cursor: pointer; }
+  .radios input { display: none; }
+  .radios input:checked + span { color: #fff; }
+  .radios label:has(input:checked) { background: var(--fg); }
+  .rows .r { display: grid; grid-template-columns: 1.2fr 1fr 1fr 32px; gap: 6px; margin-top: 6px; align-items: center; }
+  .rows .r.four { grid-template-columns: 1fr 1fr 1fr 1fr 32px; }
+  .rows .r input, .rows .r select { padding: 10px 10px; font-size: 14px; }
+  .rows .r .x { color: var(--muted); font-size: 18px; text-align: center; }
+  .shares { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .shares label { font-size: 13px; }
+  .shares .unit { position: relative; }
+  .shares .unit input { padding-right: 30px; }
+  .shares .unit span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; }
+
+  /* 바텀시트 */
+  #sheet-backdrop { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; justify-content: center; }
+  .sheet { width: 100%; max-width: 640px; max-height: 92dvh; overflow-y: auto; background: var(--card); border-radius: 24px 24px 0 0; padding: 10px 20px calc(20px + var(--sab)); animation: up .22s ease-out; }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sheet::before { content: ''; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 0 auto 12px; }
+  .sheet h3 { font-size: 19px; font-weight: 800; margin: 6px 0 4px; letter-spacing: -0.02em; }
+  .sheet .choice { display: flex; align-items: center; gap: 14px; padding: 16px 4px; border-top: 1px solid var(--line); font-weight: 700; font-size: 16px; cursor: pointer; }
+  .sheet .choice:first-of-type { border-top: 0; }
+  .sheet .choice i { width: 40px; height: 40px; border-radius: 14px; background: var(--accent-bg); color: var(--accent); display: grid; place-items: center; font-style: normal; font-size: 18px; }
+  #toast { position: fixed; left: 50%; bottom: calc(var(--tabs-h) + var(--sab) + 24px); transform: translateX(-50%); z-index: 30; background: var(--fg); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: var(--shadow); }
+
+  /* 캘린더 */
+  .cal { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 14px 10px 10px; margin-top: 12px; }
+  .cal .dow { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; color: var(--muted); font-size: 11.5px; font-weight: 600; margin-bottom: 4px; }
+  .cal .dow span:first-child { color: var(--red); }
+  .cal .week { border-top: 1px solid var(--line); padding: 4px 0 6px; }
+  .cal .days { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal .day { text-align: center; font-size: 13px; padding: 4px 0 2px; cursor: pointer; position: relative; }
+  .cal .day .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; }
+  .cal .day.today .n { background: var(--fg); color: #fff; font-weight: 700; }
+  .cal .day.out { color: var(--line); }
+  .cal .day.sun { color: var(--red); }
+  .cal .day .cl { position: absolute; right: 4px; top: 2px; font-size: 10px; }
+  .cal .day .cl.todo::after { content: ''; position: absolute; right: -3px; top: -1px; width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+  .cal .lane { display: grid; grid-template-columns: repeat(7, 1fr); height: 18px; margin-top: 2px; }
+  .cal .bar { height: 16px; margin: 0 1px; border-radius: 5px; color: #fff; font-size: 11px; line-height: 16px; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; background: var(--accent); }
+  .cal .bar.s { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+  .cal .bar.e { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+  .tl { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 12px 8px; margin-top: 12px; }
+  .tl table { border-collapse: collapse; font-size: 12px; }
+  .tl th, .tl td { border: 1px solid var(--line); min-width: 26px; height: 30px; text-align: center; padding: 0; }
+  .tl th.room, .tl td.room { position: sticky; left: 0; background: var(--card); min-width: 72px; max-width: 96px; text-align: left; padding: 0 8px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1; }
+  .tl th.today, .tl td.today { background: var(--accent-bg); }
+  .tl th.sun { color: var(--red); }
+  .tl td.bk { color: #fff; font-weight: 600; border-radius: 6px; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 0 6px; }
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <div class="login-card">
+    <img class="icon-big" src="icons/icon-192.png" alt="">
+    <h1>스테이 운영</h1>
+    <p>등록된 구글 계정으로 로그인하세요.</p>
+    <button id="btn-login" class="btn primary block">Google 로그인</button>
+    <button id="btn-logout-login" class="btn ghost block" hidden>로그아웃</button>
+    <p id="login-msg" class="muted" style="margin-top:14px"></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="top">
+    <h1 id="title">홈</h1>
+    <button id="btn-settings" class="icon" aria-label="설정">⚙</button>
+  </header>
+  <main id="view"></main>
+  <button id="fab" class="fab" aria-label="추가">+</button>
+  <nav class="tabs">
+    <button data-tab="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>홈</button>
+    <button data-tab="calendar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>캘린더</button>
+    <button data-tab="settle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a2.5 2.5 0 0 0-5 0c0 2.5 5 2.5 5 5a2.5 2.5 0 0 1-5 0M12 6v1.5M12 16.5V18"/></svg>정산</button>
+    <button data-tab="rooms"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18V8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10M3 14h18M7 10h3v4H7z"/></svg>방</button>
+  </nav>
+</div>
+
+<div id="sheet-backdrop" hidden><div id="sheet" class="sheet" role="dialog"></div></div>
+<div id="toast" hidden></div>
+
+<script src="calc.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
