@@ -7,11 +7,13 @@ const PLATFORMS = { '33m2': '삼삼엠투', zbstay: '직방', enko: '엔코' };
 const CATEGORIES = { cleaning: '청소비', supplies: '소모품', repair: '수리', other: '기타' };
 const ROOM_STATUS = { preparing: '준비중', active: '운영중', closed: '종료' };
 const PALETTE = ['#3182f6', '#06b36a', '#ff8a00', '#9b59f5', '#f04452', '#00b8d9', '#e6a700', '#ff6b9d', '#5c6bc0', '#26a69a'];
-const TAB_TITLES = { home: '홈', calendar: '캘린더', settle: '정산', rooms: '방' };
+const TAB_TITLES = { home: '홈', calendar: '캘린더', settle: '정산', rooms: '방', market: '시장' };
+const PBADGE = { '33m2': 'p33', enko: 'penko', zbstay: 'pzb' };
 
 const S = {
   me: null, users: [], rooms: [], bookings: [], expenses: [], cleanings: [], settlements: [],
   tab: 'home', calMonth: null, settleMonth: null, calView: 'grid', roomFilter: null, detailRoomId: null,
+  market: null, marketSgg: null, marketDong: null, marketSort: 'fee',
 };
 const $ = (sel) => document.querySelector(sel);
 const view = $('#view');
@@ -110,8 +112,9 @@ function render() {
   if (!S.me) return;
   $('#title').textContent = S.detailRoomId && S.tab === 'home' ? roomName(S.detailRoomId) : TAB_TITLES[S.tab];
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab));
-  const fns = { home: S.detailRoomId ? renderRoomDetail : renderHome, calendar: renderCalendar, settle: renderSettle, rooms: renderRooms };
+  const fns = { home: S.detailRoomId ? renderRoomDetail : renderHome, calendar: renderCalendar, settle: renderSettle, rooms: renderRooms, market: renderMarket };
   view.innerHTML = fns[S.tab]();
+  $('#fab').hidden = S.tab === 'market';
   bindView();
 }
 function bindView() {
@@ -265,6 +268,52 @@ function daySheet(date) {
   ];
   sheet(`<h3>${fmtMonth(Calc.monthOf(date))} ${Number(date.slice(8))}일</h3><div class="list">${items.length ? items.join('') : '<div class="empty">일정이 없어요</div>'}</div>
     <div class="btns"><button class="btn primary" data-act="add-booking" data-date="${date}">이날 예약 추가</button><button class="btn" data-act="add-expense" data-date="${date}">지출 추가</button></div>`);
+}
+
+/* ---------- 시장 (stay-market-scan 수집 데이터, 김해·창원) ---------- */
+const pct = (v) => v == null ? '–' : `${Math.round(v * 100)}%`;
+const manwon = (v) => v == null ? '–' : `${Math.round(v / 10000)}만`;
+function loadMarket() {
+  if (S.market) return;
+  S.market = 'loading';
+  fetch('./market.json').then(r => r.json()).then((d) => { S.market = d; render(); }).catch(() => { S.market = 'error'; render(); });
+}
+function renderMarket() {
+  if (!S.market || S.market === 'loading') { loadMarket(); return '<div class="card"><div class="empty">시장 데이터 불러오는 중…</div></div>'; }
+  if (S.market === 'error') return '<div class="card"><div class="empty">market.json 을 불러오지 못했어요</div></div>';
+  if (S.marketDong) return renderMarketDong();
+  const M = S.market;
+  const sggs = [...new Set(M.dongs.map(d => d.sgg))];
+  const dongs = M.dongs.filter(d => !S.marketSgg || d.sgg === S.marketSgg);
+  const sum = (f) => dongs.reduce((s, d) => s + (f(d) || 0), 0);
+  const ls = M.listings.filter(l => dongs.some(d => d.id === l.adm_cd2));
+  const withCal = ls.filter(l => l.booked_7d != null);
+  const occ = ls.length ? ls.filter(l => l.occupied).length / ls.length : null;
+  const occ7 = withCal.length ? withCal.reduce((s, l) => s + l.booked_7d, 0) / (withCal.length * 7) : null;
+  return `<div class="chips"><button class="chip ${S.marketSgg == null ? 'on' : ''}" data-act="market-sgg" data-id="">전체</button>${sggs.map(s =>
+      `<button class="chip ${S.marketSgg === s ? 'on' : ''}" data-act="market-sgg" data-id="${esc(s)}">${esc(s.replace('창원시', '창원 '))}</button>`).join('')}</div>
+    <div class="card"><div class="row"><b style="font-size:16px">${esc(S.marketSgg ? S.marketSgg.replace('창원시', '창원 ') : '김해 · 창원')}</b><span class="muted">${M.asof.replace(/-/g, '.')} 수집</span></div>
+      <div class="stats"><div><small>매물</small><b>${ls.length}</b></div><div><small>입주중</small><b>${pct(occ)}</b></div><div><small>1주차 가동</small><b>${pct(occ7)}</b></div><div><small>동</small><b>${dongs.length}</b></div></div>
+      <p class="muted" style="margin:10px 0 0">삼삼엠투 ${sum(d => d.supply['33m2'])} · 직방 ${sum(d => d.supply.zbstay)} · 엔코 ${sum(d => d.supply.enko)}. 입주중은 수집일 기준, 1주차 가동은 앞 7일 예약 비율.</p></div>
+    ${dongs.map(d => `<div class="card tap" data-act="market-dong" data-id="${d.id}"><div class="row"><div><b style="font-size:16px">${esc(d.name)}</b> <span class="muted">${esc(d.sgg.replace('창원시', '창원 '))}</span></div><b>${d.supply.total}실</b></div>
+      <div class="stats"><div><small>입주중</small><b>${pct(d.occupied['33m2'])}</b></div><div><small>1주차 가동</small><b>${pct(d.occ7d['33m2'])}</b></div><div><small>90일 예약</small><b>${pct(d.rate90['33m2'])}</b></div><div><small>월 요금</small><b>${manwon(d.fee['33m2'])}</b></div></div>
+      <p class="muted" style="margin:8px 0 0">삼삼엠투 ${d.supply['33m2']} · 직방 ${d.supply.zbstay} · 엔코 ${d.supply.enko}${d.reviews12m != null ? ` · 12개월 리뷰 ${d.reviews12m}` : ''}</p></div>`).join('')}`;
+}
+function renderMarketDong() {
+  const M = S.market, d = M.dongs.find(x => x.id === S.marketDong);
+  if (!d) { S.marketDong = null; return renderMarket(); }
+  const sorters = { fee: (a, b) => (a.monthly_fee || 0) - (b.monthly_fee || 0), occ: (a, b) => (b.booked_90d || 0) - (a.booked_90d || 0), reviews: (a, b) => ((b.reviews_12m ?? b.bookings) || 0) - ((a.reviews_12m ?? a.bookings) || 0) };
+  const ls = M.listings.filter(l => l.adm_cd2 === d.id).sort(sorters[S.marketSort]);
+  const stay = (l) => l.booked_7d == null ? '<span class="badge gray">확인불가</span>' : l.occupied ? `<span class="badge green">입주중</span> <span class="muted">~${fmtMD(l.next_available)}</span>` : `<span class="badge blue">공실</span> <span class="muted">${l.next_available ? fmtMD(l.next_available) + '부터' : ''}</span>`;
+  return `<button class="back" data-act="market-back">‹ ${esc(d.sgg.replace('창원시', '창원 '))}</button>
+    <div class="card"><div class="row"><b style="font-size:18px">${esc(d.name)}</b><b>${d.supply.total}실</b></div>
+      <div class="stats"><div><small>입주중</small><b>${pct(d.occupied['33m2'])}</b></div><div><small>1주차 가동</small><b>${pct(d.occ7d['33m2'])}</b></div><div><small>90일 예약</small><b>${pct(d.rate90['33m2'])}</b></div><div><small>월 요금</small><b>${manwon(d.fee['33m2'])}</b></div></div></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:10px"><div class="seg">${[['fee', '요금순'], ['occ', '예약 많은순'], ['reviews', '리뷰순']].map(([k, v]) => `<button class="${S.marketSort === k ? 'on' : ''}" data-act="market-sort" data-v="${k}">${v}</button>`).join('')}</div></div>
+    <div class="card list">${ls.map(l => `<a class="item" href="${esc(l.url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
+      <div class="main"><b><span class="badge ${PBADGE[l.platform]}">${PLATFORMS[l.platform]}</span> ${esc(l.name)}</b>
+        <span>${esc(l.type || '')}${l.size ? ` · ${l.size}평` : ''}${l.rooms ? ` · 방 ${l.rooms}` : ''}${l.addr_lot ? ` · ${esc(l.addr_lot.replace(/^경상남도 /, ''))}` : ''}</span>
+        <span>${stay(l)}${l.booked_7d != null ? ` · 1주차 ${l.booked_7d}/7일 · 90일 ${l.booked_90d}일` : ''}${l.reviews_12m != null ? ` · 리뷰 ${l.reviews_12m}` : l.bookings != null ? ` · 예약 ${l.bookings}건` : ''}</span></div>
+      <div class="right"><span class="num" style="font-size:15px;color:var(--fg)">${manwon(l.monthly_fee)}원/월</span>${l.weekly_fee ? `<span>주 ${manwon(l.weekly_fee)}${l.mgmt_fee ? ` + 관리 ${manwon(l.mgmt_fee)}` : ''}</span>` : ''}${l.discount ? '<span class="badge orange">할인</span>' : ''}</div></a>`).join('') || '<div class="empty">매물이 없어요</div>'}</div>`;
 }
 
 /* ---------- 정산 ---------- */
@@ -569,6 +618,10 @@ document.addEventListener('click', async (e) => {
     case 'export-csv': exportCsv(); break;
     case 'export-json': exportJson(); break;
     case 'history': historySheet(); break;
+    case 'market-sgg': S.marketSgg = id || null; render(); window.scrollTo(0, 0); break;
+    case 'market-dong': S.marketDong = id; render(); window.scrollTo(0, 0); break;
+    case 'market-back': S.marketDong = null; render(); break;
+    case 'market-sort': S.marketSort = el.dataset.v; render(); break;
     case 'logout': closeSheet(); store.signOut(); break;
   }
 });

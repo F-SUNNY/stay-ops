@@ -186,6 +186,10 @@ booked 면 `{ id: booking.id, bookingId: booking.id, roomId, date: checkOut, ass
   분배 비율(사용자별 % 입력, 합 100 아니면 저장 불가), 고정 월 지출 목록(항목·금액·부담자·납부일, 추가/삭제),
   초기 세팅비 목록(항목·금액·낸 사람·날짜, 추가/삭제). 삭제는 예약·지출이 없을 때만.
 
+### 시장 (2026-10-26 추가)
+바텀 탭 5번째. `market.json`(stay-market-scan 의 listings/dong_metrics 에서 김해시·창원시 5개 구만 추출, `scripts/build-market.py`)을 첫 진입 때 fetch.
+시군구 칩 → 동 카드(공급 합계, 삼삼엠투 기준 입주중·1주차 가동·90일 예약·중위 월 요금, 플랫폼별 수) → 동 상세(매물 목록: 플랫폼 배지, 이름, 유형·평·주소, 입주중/공실·다음 입주 가능일·1주차/90일 예약일수·리뷰 또는 예약 수, 월 요금·주 요금, 할인. 탭하면 플랫폼 페이지). 정렬 요금순/예약 많은순/리뷰순. 이 탭에서는 FAB 숨김.
+
 ### 설정
 - 내 이름·색상 수정, 상대방 표시, 로그아웃, JSON 전체 내보내기(rooms/bookings/expenses/cleanings/settlements), 앱 버전.
 
