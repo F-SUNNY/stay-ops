@@ -2,7 +2,7 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut as fbSignOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, onSnapshot, setDoc, addDoc,
-  deleteDoc, writeBatch, serverTimestamp, getDoc }
+  deleteDoc, writeBatch, serverTimestamp, getDoc, getDocs, query, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 let auth, db, me = null;
@@ -61,6 +61,15 @@ export async function saveBookingWithCleaning(booking, cleaning, existingCleanin
   else if (existingCleaning && !existingCleaning.done) batch.delete(cref);
   await batch.commit();
   return bref.id;
+}
+
+// 변경 기록. 실패해도 본 저장은 이미 끝났으므로 콘솔에만 남긴다
+export function logHistory(entry) {
+  return addDoc(collection(db, 'history'), { ...entry, at: new Date().toISOString(), by: me }).catch(console.error);
+}
+export async function fetchHistory(n) {
+  const snap = await getDocs(query(collection(db, 'history'), orderBy('at', 'desc'), limit(n)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 export async function removeBooking(bookingId, existingCleaning) {

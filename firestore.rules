@@ -13,5 +13,9 @@ service cloud.firestore {
     match /{col}/{doc} {
       allow read, write: if allowed() && col in ['rooms', 'bookings', 'expenses', 'cleanings', 'settlements'];
     }
+    match /history/{doc} {
+      allow read, create: if allowed();
+      allow update, delete: if false;
+    }
   }
 }

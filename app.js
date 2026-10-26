@@ -59,6 +59,52 @@ const roomOptions = (selected, withCommon) => (withCommon ? `<option value="" ${
 const radios = (name, map, selected) => `<div class="radios">${Object.entries(map).map(([k, v]) =>
   `<label><input type="radio" name="${name}" value="${k}" ${k === selected ? 'checked' : ''}><span>${v}</span></label>`).join('')}</div>`;
 
+/* ---------- 변경 기록 ---------- */
+const costStr = (cs) => (cs || []).map(c => `${c.label} ${won(c.amount)}(${userName(c.payer)}${c.day ? `, ${c.day}일` : ''}${c.date ? `, ${c.date}` : ''})`).join(' · ') || '없음';
+const describe = {
+  rooms: (r) => ({ '이름': r.name, '주소': r.address || '', '상태': ROOM_STATUS[r.status] || r.status, '계약 시작': r.contractStart || '', '계약 종료': r.contractEnd || '계속',
+    '보증금': won(r.deposit || 0), '기본 수령자': userName(r.defaultReceiver), '분배 비율': Object.entries(r.shares || {}).map(([e, p]) => `${userName(e)} ${p}%`).join(' · '),
+    '고정 지출': costStr(r.fixedCosts), '세팅비': costStr(r.setupCosts),
+    '매물 주소': Object.entries(r.platformUrls || {}).filter(([, u]) => u).map(([k, u]) => `${PLATFORMS[k]} ${u}`).join(' · ') || '' }),
+  bookings: (b) => ({ '방': roomName(b.roomId), '플랫폼': PLATFORMS[b.platform] || b.platform, '체크인': b.checkIn, '체크아웃': b.checkOut, '금액': won(b.amount || 0),
+    '수령자': userName(b.receiver), '메모': b.guestNote || '', '상태': b.status === 'cancelled' ? '취소' : '예약' }),
+  expenses: (e) => ({ '방': roomName(e.roomId), '날짜': e.date, '항목': CATEGORIES[e.category] || e.category, '금액': won(e.amount || 0), '낸 사람': userName(e.payer), '메모': e.memo || '' }),
+  cleanings: (c) => ({ '방': roomName(c.roomId), '날짜': c.date, '담당': c.assignee ? userName(c.assignee) : '미정', '완료': c.done ? '완료' : '아직', '메모': c.memo || '' }),
+  users: (u) => ({ '이름': u.name || '', '색상': u.color || '' }),
+};
+function diffDesc(col, before, after) {
+  const a = describe[col](before), b = describe[col](after);
+  return Object.keys(b).filter(k => (a[k] ?? '') !== (b[k] ?? '')).map(k => `${k}: ${a[k] || '(없음)'} → ${b[k] || '(없음)'}`);
+}
+const summaryOf = {
+  rooms: (r) => r.name,
+  bookings: (b) => `${roomName(b.roomId)} ${fmtMD(b.checkIn)}~${fmtMD(b.checkOut)} ${won(b.amount || 0)}`,
+  expenses: (e) => `${roomName(e.roomId)} ${CATEGORIES[e.category] || e.category} ${won(e.amount || 0)} (${fmtMD(e.date)})`,
+  cleanings: (c) => `${roomName(c.roomId)} 청소 ${fmtMD(c.date)}`,
+  users: (u) => u.name || '',
+};
+const COL_LABEL = { rooms: '방', bookings: '예약', expenses: '지출', cleanings: '청소', settlements: '정산', users: '내 정보' };
+const ACT_LABEL = { create: '추가', update: '수정', delete: '삭제', cancel: '취소', confirm: '확정' };
+// 저장이 끝난 뒤 호출. before/after 는 같은 컬렉션의 문서(없으면 null)
+function hist(action, col, docId, before, after, extraSummary) {
+  const target = after || before;
+  const summary = extraSummary || (target && summaryOf[col] ? summaryOf[col](target) : docId);
+  const changes = action === 'update' && before && after && describe[col] ? diffDesc(col, before, after) : [];
+  if (action === 'update' && !changes.length) return;
+  store.logHistory({ action, col, docId: docId || null, summary, changes });
+}
+
+async function historySheet() {
+  sheet('<h3>변경 기록</h3><div class="empty">불러오는 중…</div>');
+  let rows = [];
+  try { rows = await store.fetchHistory(300); } catch (e) { sheet('<h3>변경 기록</h3><div class="empty">불러오지 못했어요</div>'); return; }
+  const fmtAt = (iso) => { const d = new Date(iso); return `${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  const items = rows.map(h => `<div class="item" style="cursor:default"><span class="dot" style="background:${userColor(h.by)};margin-top:5px;align-self:flex-start"></span>
+    <div class="main"><b style="white-space:normal">${esc(COL_LABEL[h.col] || h.col)} ${esc(ACT_LABEL[h.action] || h.action)} · ${esc(h.summary || '')}</b>
+    <span>${esc(userName(h.by))} · ${fmtAt(h.at)}</span>${(h.changes || []).map(c => `<span style="color:var(--sub)">${esc(c)}</span>`).join('')}</div></div>`);
+  sheet(`<h3>변경 기록</h3><p class="muted">최근 ${rows.length}건</p><div class="list">${items.join('') || '<div class="empty">아직 기록이 없어요</div>'}</div>`);
+}
+
 /* ---------- 렌더 ---------- */
 function render() {
   if (!S.me) return;
@@ -263,6 +309,7 @@ async function confirmSettle() {
   const snapshot = Calc.calcMonth(m, calcData());
   try {
     await store.save('settlements', m, { month: m, snapshot, confirmedAt: new Date().toISOString(), confirmedBy: S.me.email });
+    hist('confirm', 'settlements', m, null, null, `${fmtMonth(m)} · ${snapshot.transfers.map(t => `${userName(t.from)}→${userName(t.to)} ${won(t.amount)}`).join(', ') || '정산 금액 없음'}`);
     toast(`${fmtMonth(m)} 정산을 확정했어요`);
   } catch (e) { fail(e); }
 }
@@ -352,7 +399,7 @@ function roomForm(room) {
         platformUrls: Object.fromEntries(Object.keys(PLATFORMS).map(k => [k, fd.get('url_' + k).trim() || null])),
         sortOrder: room ? (room.sortOrder || 0) : S.rooms.reduce((m, x) => Math.max(m, (x.sortOrder || 0) + 1), 0),
       };
-      try { await store.save('rooms', room ? room.id : null, data); closeSheet(); toast('저장했어요'); } catch (err) { fail(err); }
+      try { const id = await store.save('rooms', room ? room.id : null, data); hist(room ? 'update' : 'create', 'rooms', id, room, data); closeSheet(); toast('저장했어요'); } catch (err) { fail(err); }
     });
   });
 }
@@ -394,7 +441,7 @@ function bookingForm(booking, preset = {}) {
       if (ov.length && !confirm(`${ov.map(o => `${fmtMD(o.checkIn)}~${fmtMD(o.checkOut)}`).join(', ')} 예약과 기간이 겹쳐요. 그래도 저장할까요?`)) return;
       if (!(await okIfConfirmed(data.checkIn, booking && booking.checkIn))) return;
       const existing = booking ? cleaningOf(booking.id) : null;
-      try { await store.saveBookingWithCleaning(data, Calc.cleaningFor({ ...data, id: booking ? booking.id : 'new' }, existing), existing); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
+      try { const id = await store.saveBookingWithCleaning(data, Calc.cleaningFor({ ...data, id: booking ? booking.id : 'new' }, existing), existing); hist(booking ? 'update' : 'create', 'bookings', id, booking, data); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
     });
   });
 }
@@ -408,13 +455,13 @@ async function cancelBooking(id) {
   if (!(await okIfConfirmed(b.checkIn))) return;
   const existing = cleaningOf(id);
   const data = { ...b, status: 'cancelled' };
-  try { await store.saveBookingWithCleaning(data, null, existing); closeSheet(); toast('취소 처리했어요'); } catch (e) { fail(e); }
+  try { await store.saveBookingWithCleaning(data, null, existing); hist('cancel', 'bookings', id, b, data); closeSheet(); toast('취소 처리했어요'); } catch (e) { fail(e); }
 }
 async function deleteBooking(id) {
   const b = S.bookings.find(x => x.id === id); if (!b) return;
   if (!confirm('이 예약을 삭제할까요? 되돌릴 수 없어요.')) return;
   if (!(await okIfConfirmed(b.checkIn))) return;
-  try { await store.removeBooking(id, cleaningOf(id)); closeSheet(); toast('삭제했어요'); } catch (e) { fail(e); }
+  try { await store.removeBooking(id, cleaningOf(id)); hist('delete', 'bookings', id, b, null); closeSheet(); toast('삭제했어요'); } catch (e) { fail(e); }
 }
 
 /* ---------- 지출 ---------- */
@@ -436,7 +483,7 @@ function expenseForm(expense, preset = {}) {
       const data = { roomId: fd.get('roomId') || null, category: fd.get('category'), amount: parseAmt(fd.get('amount')), payer: fd.get('payer'), date: fd.get('date'), memo: fd.get('memo').trim() };
       if (!data.amount) { toast('금액을 입력하세요'); return; }
       if (!(await okIfConfirmed(data.date, expense && expense.date))) return;
-      try { await store.save('expenses', expense ? expense.id : null, data); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
+      try { const id = await store.save('expenses', expense ? expense.id : null, data); hist(expense ? 'update' : 'create', 'expenses', id, expense, data); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
     });
   });
 }
@@ -444,7 +491,7 @@ async function deleteExpense(id) {
   const x = S.expenses.find(e => e.id === id); if (!x) return;
   if (!confirm('이 지출을 삭제할까요?')) return;
   if (!(await okIfConfirmed(x.date))) return;
-  try { await store.remove('expenses', id); closeSheet(); toast('삭제했어요'); } catch (e) { fail(e); }
+  try { await store.remove('expenses', id); hist('delete', 'expenses', id, x, null); closeSheet(); toast('삭제했어요'); } catch (e) { fail(e); }
 }
 
 /* ---------- 청소 ---------- */
@@ -460,7 +507,8 @@ function cleaningForm(id) {
     sh.querySelector('#cl-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      try { await store.save('cleanings', id, { assignee: fd.get('assignee') || null, done: fd.get('done') === 'true', memo: fd.get('memo').trim() }); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
+      const patch = { assignee: fd.get('assignee') || null, done: fd.get('done') === 'true', memo: fd.get('memo').trim() };
+      try { await store.save('cleanings', id, patch); hist('update', 'cleanings', id, c, { ...c, ...patch }); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
     });
   });
 }
@@ -475,13 +523,15 @@ function settingsSheet() {
       <button type="submit" class="btn primary block">저장</button>
     </form>
     <div class="f"><label>함께 쓰는 사람</label>${S.users.filter(u => u.email !== S.me.email).map(u => `<div class="row"><span><span class="dot" style="display:inline-block;background:${u.color || '#8b95a1'};margin-right:6px"></span>${esc(u.name || '')}</span><span class="muted">${esc(u.email)}</span></div>`).join('') || '<p class="muted">Firestore 콘솔의 users 컬렉션에 상대방 이메일 문서를 추가하세요.</p>'}</div>
+    <div class="btns"><button class="btn" data-act="history">변경 기록 보기</button></div>
     <div class="btns"><button class="btn" data-act="export-json">전체 데이터 JSON 내보내기</button></div>
     <div class="btns"><button class="btn danger" data-act="logout">로그아웃</button></div>
     <p class="muted" style="text-align:center;margin:14px 0 0">스테이 운영 v${VERSION}</p>`, (sh) => {
     sh.querySelector('#me-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      try { await store.save('users', S.me.email, { name: fd.get('name').trim(), color: fd.get('color') }); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
+      const patch = { name: fd.get('name').trim(), color: fd.get('color') };
+      try { await store.save('users', S.me.email, patch); hist('update', 'users', S.me.email, me, { ...me, ...patch }); closeSheet(); toast('저장했어요'); } catch (er) { fail(er); }
     });
   });
 }
@@ -499,7 +549,7 @@ document.addEventListener('click', async (e) => {
     case 'add-room': roomForm(null); break;
     case 'edit-room': roomForm(roomById(id)); break;
     case 'delete-room':
-      if (confirm('이 방을 삭제할까요?')) { try { await store.remove('rooms', id); closeSheet(); if (S.detailRoomId === id) S.detailRoomId = null; toast('삭제했어요'); } catch (er) { fail(er); } }
+      if (confirm('이 방을 삭제할까요?')) { try { const r = roomById(id); await store.remove('rooms', id); hist('delete', 'rooms', id, r, null); closeSheet(); if (S.detailRoomId === id) S.detailRoomId = null; toast('삭제했어요'); } catch (er) { fail(er); } }
       break;
     case 'add-booking': bookingForm(null, { roomId: el.dataset.room, date: el.dataset.date }); break;
     case 'edit-booking': { const b = S.bookings.find(x => x.id === id); if (b) bookingForm(b); break; }
@@ -509,7 +559,7 @@ document.addEventListener('click', async (e) => {
     case 'edit-expense': { const x = S.expenses.find(y => y.id === id); if (x) expenseForm(x); break; }
     case 'delete-expense': deleteExpense(id); break;
     case 'edit-cleaning': cleaningForm(id); break;
-    case 'toggle-clean': { const c = cleaningOf(id); if (c) { try { await store.save('cleanings', id, { done: !c.done, assignee: c.assignee || S.me.email }); } catch (er) { fail(er); } } break; }
+    case 'toggle-clean': { const c = cleaningOf(id); if (c) { const patch = { done: !c.done, assignee: c.assignee || S.me.email }; try { await store.save('cleanings', id, patch); hist('update', 'cleanings', id, c, { ...c, ...patch }); } catch (er) { fail(er); } } break; }
     case 'day': daySheet(el.dataset.date); break;
     case 'room-filter': S.roomFilter = id || null; render(); break;
     case 'cal-view': S.calView = el.dataset.v; render(); break;
@@ -518,6 +568,7 @@ document.addEventListener('click', async (e) => {
     case 'confirm-settle': confirmSettle(); break;
     case 'export-csv': exportCsv(); break;
     case 'export-json': exportJson(); break;
+    case 'history': historySheet(); break;
     case 'logout': closeSheet(); store.signOut(); break;
   }
 });

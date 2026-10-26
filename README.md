@@ -38,6 +38,7 @@
 npm install -g firebase-tools
 firebase login                      # 브라우저 로그인 1회
 firebase deploy --only hosting      # 수정할 때마다. 주소: https://stay-ops-97a5a.web.app
+firebase deploy --only firestore:rules   # firestore.rules 를 바꿨을 때
 ```
 `firebase.json` 이 docs/tests/scripts 를 제외하고 나머지 파일을 올린다.
 
@@ -67,7 +68,7 @@ firebase deploy --only hosting      # 수정할 때마다. 주소: https://stay-
 - **캘린더**: 월 보기(방별 색 막대, 체크아웃 날 🧹, 미완료는 빨간 점) / 타임라인(날짜 × 방). 날짜 탭 → 그날 일정.
 - **정산**: 월별 수입·지출·순이익, "A → B N원", 계산 근거, 방별 세팅비 회수율. **정산 확정** 으로 스냅샷 저장, **CSV 내보내기**.
 - **방**: 방 추가·수정. 예약·지출이 있는 방은 삭제 대신 상태를 종료로.
-- **설정**(톱니): 이름·색, 전체 데이터 JSON 내보내기, 로그아웃.
+- **설정**(톱니): 이름·색, **변경 기록**(누가 언제 무엇을 추가·수정·삭제했는지, 수정은 이전→이후), 전체 데이터 JSON 내보내기, 로그아웃.
 
 ### 계산 규칙 요약
 - 예약 수입은 **체크인 날짜가 속한 달**에 전액. 취소 예약은 금액란에 적은 값(위약금)만.

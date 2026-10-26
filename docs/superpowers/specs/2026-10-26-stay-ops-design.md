@@ -91,6 +91,14 @@ bookingId, roomId, date: "YYYY-MM-DD", assignee: email | null, done: bool, memo
 문서 id = bookingId (예약 1건에 청소 1건). 예약 저장 시 upsert(기존 done·assignee·memo 유지, date 만 갱신),
 예약 취소·삭제 시 done 이 false 면 삭제하고 true 면 남긴다.
 
+### history/{autoId}  (변경 기록, 추가만 가능)
+```
+at: ISO 문자열(클라이언트 시각), by: email, action: "create"|"update"|"delete"|"cancel"|"confirm"
+col: "rooms"|"bookings"|"expenses"|"cleanings"|"settlements"|"users", docId
+summary: 사람이 읽는 한 줄, changes: ["라벨: 이전 → 이후", ...]   (update 만. 바뀐 게 없으면 기록하지 않음)
+```
+모든 쓰기 직후 `app.js` 의 `hist()` 가 추가한다. 설정 → "변경 기록 보기" 에서 최근 300건을 최신순으로 본다.
+
 ### settlements/{YYYY-MM}
 ```
 month, confirmedAt, confirmedBy
@@ -218,6 +226,7 @@ service cloud.firestore {
     match /{col}/{doc} {
       allow read, write: if allowed() && col in ['rooms','bookings','expenses','cleanings','settlements'];
     }
+    match /history/{doc} { allow read, create: if allowed(); allow update, delete: if false; }
   }
 }
 ```
