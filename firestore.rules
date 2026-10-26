@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    function allowed() {
+      return request.auth != null
+        && exists(/databases/$(db)/documents/users/$(request.auth.token.email));
+    }
+    match /users/{email} {
+      allow read: if allowed();
+      allow update: if allowed() && request.auth.token.email == email;
+      allow create, delete: if false;
+    }
+    match /{col}/{doc} {
+      allow read, write: if allowed() && col in ['rooms', 'bookings', 'expenses', 'cleanings', 'settlements'];
+    }
+  }
+}
