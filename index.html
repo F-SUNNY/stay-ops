@@ -123,6 +123,16 @@
   .seg { display: inline-flex; background: var(--line); border-radius: 10px; padding: 3px; }
   .seg button { padding: 5px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); }
   .seg button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+  .card.warn { background: var(--orange-bg); color: var(--orange); font-weight: 600; font-size: 14px; }
+  .trend-big { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; }
+  .trend-delta { font-size: 13px; font-weight: 600; margin-left: 6px; }
+  .trend-delta.up { color: var(--green); } .trend-delta.down { color: var(--red); }
+  .tbars { display: flex; align-items: flex-end; gap: 4px; height: 56px; margin-top: 12px; }
+  .tbars .tbar { flex: 1; height: 100%; display: flex; align-items: flex-end; background: var(--soft); border-radius: 4px; overflow: hidden; }
+  .tbars .tbar i { display: flex; align-items: flex-end; width: 100%; background: #9ec5ff; border-radius: 4px 4px 0 0; }
+  .tbars .tbar i b { display: block; width: 100%; background: var(--accent); }
+  .tbars .tbar.partial { opacity: .45; }
+  .tlab { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 4px; }
   .back { font-size: 15px; color: var(--accent); font-weight: 600; margin: 8px 0 0; display: inline-block; }
 
   /* 폼 */
@@ -217,7 +227,7 @@
 <div id="sheet-backdrop" hidden><div id="sheet" class="sheet" role="dialog"></div></div>
 <div id="toast" hidden></div>
 
-<script src="calc.js?v=7"></script>
-<script type="module" src="app.js?v=7"></script>
+<script src="calc.js?v=8"></script>
+<script type="module" src="app.js?v=8"></script>
 </body>
 </html>

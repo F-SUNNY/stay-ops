@@ -1,4 +1,4 @@
-import * as store from './store.js?v=7';
+import * as store from './store.js?v=8';
 import { firebaseConfig } from './firebase-config.js';
 
 const VERSION = '0.2.0';
@@ -13,7 +13,7 @@ const PBADGE = { '33m2': 'p33', enko: 'penko', zbstay: 'pzb' };
 const S = {
   me: null, users: [], rooms: [], bookings: [], expenses: [], cleanings: [], settlements: [],
   tab: 'home', calMonth: null, settleMonth: null, calView: 'grid', roomFilter: null, detailRoomId: null,
-  market: null, marketSgg: null, marketDong: null, marketSort: 'fee',
+  market: null, marketSgg: null, marketDong: null, marketSort: 'fee', marketDongSort: 'supply',
 };
 const $ = (sel) => document.querySelector(sel);
 const view = $('#view');
@@ -273,6 +273,21 @@ function daySheet(date) {
 /* ---------- 시장 (stay-market-scan 수집 데이터, 김해·창원) ---------- */
 const pct = (v) => v == null ? '–' : `${Math.round(v * 100)}%`;
 const manwon = (v) => v == null ? '–' : `${Math.round(v / 10000)}만`;
+const staleDays = (c) => c && c.lastSuccess ? Math.floor((Date.now() - new Date(c.lastSuccess + 'T00:00:00+09:00')) / 864e5) : 0;
+const pp = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(Math.round(v * 100))}%p`;
+function trendBars(weeks) {
+  const bar = (w) => w.occIncl == null ? `<div class="tbar partial" title="${w.week}"></div>`
+    : `<div class="tbar${w.partial ? ' partial' : ''}" title="${w.week} ${pct(w.occ)}"><i style="height:${Math.round(w.occIncl * 100)}%"><b style="height:${Math.round(w.occ / w.occIncl * 100) || 0}%"></b></i></div>`;
+  return `<div class="tbars">${weeks.map(bar).join('')}</div><div class="tlab"><span>${weeks[0].week.slice(5)}</span><span>${weeks[weeks.length - 1].week.slice(5)}</span></div>`;
+}
+function trendCard(s) {
+  if (!s || s.occ28 == null) return '';
+  const base = s.weeks[s.weeks.length - 5], delta = base && base.occ != null ? s.occ28 - base.occ : null;
+  return `<div class="card"><small class="muted">최근 28일 실가동률</small>
+    <div><span class="trend-big">${pct(s.occ28)}</span>${delta == null ? '' : `<span class="trend-delta ${delta >= 0 ? 'up' : 'down'}">${pp(delta)} 4주 전 대비</span>`}</div>
+    ${trendBars(s.weeks)}
+    <p class="muted" style="margin:8px 0 0">진한 색 예약, 연한 색 호스트 차단 포함(${pct(s.occ28Incl)}). 매물 ${s.supply ?? '–'}${s.supplyDelta28 == null ? '' : ` · 4주 전보다 ${s.supplyDelta28 >= 0 ? '+' : ''}${s.supplyDelta28}`}</p></div>`;
+}
 function loadMarket() {
   if (S.market) return;
   S.market = 'loading';
@@ -282,32 +297,42 @@ function renderMarket() {
   if (!S.market || S.market === 'loading') { loadMarket(); return '<div class="card"><div class="empty">시장 데이터 불러오는 중…</div></div>'; }
   if (S.market === 'error') return '<div class="card"><div class="empty">market.json 을 불러오지 못했어요</div></div>';
   if (S.marketDong) return renderMarketDong();
-  const M = S.market;
+  const M = S.market, T = M.trend, C = M.collect, hasTrend = !!(T && T.days >= 7);
   const sggs = [...new Set(M.dongs.map(d => d.sgg))];
-  const dongs = M.dongs.filter(d => !S.marketSgg || d.sgg === S.marketSgg);
+  const occ28 = (d) => (T && T.dongs[d.id] ? T.dongs[d.id].occ28 : null);
+  let dongs = M.dongs.filter(d => !S.marketSgg || d.sgg === S.marketSgg);
+  if (hasTrend && S.marketDongSort === 'occ') dongs = [...dongs].sort((a, b) => (occ28(b) ?? -1) - (occ28(a) ?? -1));
   const sum = (f) => dongs.reduce((s, d) => s + (f(d) || 0), 0);
   const ls = M.listings.filter(l => dongs.some(d => d.id === l.adm_cd2));
   const withCal = ls.filter(l => l.booked_7d != null);
   const occ = ls.length ? ls.filter(l => l.occupied).length / ls.length : null;
   const occ7 = withCal.length ? withCal.reduce((s, l) => s + l.booked_7d, 0) / (withCal.length * 7) : null;
+  const stale = staleDays(C);
   return `<div class="chips"><button class="chip ${S.marketSgg == null ? 'on' : ''}" data-act="market-sgg" data-id="">전체</button>${sggs.map(s =>
       `<button class="chip ${S.marketSgg === s ? 'on' : ''}" data-act="market-sgg" data-id="${esc(s)}">${esc(s.replace('창원시', '창원 '))}</button>`).join('')}</div>
-    <div class="card"><div class="row"><b style="font-size:16px">${esc(S.marketSgg ? S.marketSgg.replace('창원시', '창원 ') : '김해 · 창원')}</b><span class="muted">${M.asof.replace(/-/g, '.')} 수집</span></div>
+    ${stale > 2 ? `<div class="card warn">수집이 ${stale}일 멈춤 · ${esc(C.error || '원인 미상')}</div>` : ''}
+    <div class="card"><div class="row"><b style="font-size:16px">${esc(S.marketSgg ? S.marketSgg.replace('창원시', '창원 ') : '김해 · 창원')}</b><span class="muted">${((C && C.lastSuccess) || M.asof).replace(/-/g, '.')} 수집</span></div>
       <div class="stats"><div><small>매물</small><b>${ls.length}</b></div><div><small>입주중</small><b>${pct(occ)}</b></div><div><small>1주차 가동</small><b>${pct(occ7)}</b></div><div><small>동</small><b>${dongs.length}</b></div></div>
-      <p class="muted" style="margin:10px 0 0">삼삼엠투 ${sum(d => d.supply['33m2'])} · 직방 ${sum(d => d.supply.zbstay)} · 엔코 ${sum(d => d.supply.enko)}. 입주중은 수집일 기준, 1주차 가동은 앞 7일 예약 비율.</p></div>
-    ${dongs.map(d => `<div class="card tap" data-act="market-dong" data-id="${d.id}"><div class="row"><div><b style="font-size:16px">${esc(d.name)}</b> <span class="muted">${esc(d.sgg.replace('창원시', '창원 '))}</span></div><b>${d.supply.total}실</b></div>
+      <p class="muted" style="margin:10px 0 0">삼삼엠투 ${sum(d => d.supply['33m2'])} · 직방 ${sum(d => d.supply.zbstay)} · 엔코 ${sum(d => d.supply.enko)}. 입주중은 수집일 기준, 1주차 가동은 앞 7일 예약 비율.</p>
+      ${T && !hasTrend ? `<p class="muted" style="margin:6px 0 0">추세 모으는 중 · ${T.days}일째</p>` : ''}</div>
+    ${hasTrend ? trendCard(T.cities[S.marketSgg || 'all']) : ''}
+    ${hasTrend ? `<div style="display:flex;justify-content:flex-end;margin-top:10px"><div class="seg">${[['supply', '매물순'], ['occ', '실가동률순']].map(([k, v]) => `<button class="${S.marketDongSort === k ? 'on' : ''}" data-act="market-dong-sort" data-v="${k}">${v}</button>`).join('')}</div></div>` : ''}
+    ${dongs.map(d => `<div class="card tap" data-act="market-dong" data-id="${d.id}"><div class="row"><div><b style="font-size:16px">${esc(d.name)}</b> <span class="muted">${esc(d.sgg.replace('창원시', '창원 '))}</span>${hasTrend && occ28(d) != null ? ` <span class="badge blue">28일 가동 ${pct(occ28(d))}</span>` : ''}</div><b>${d.supply.total}실</b></div>
       <div class="stats"><div><small>입주중</small><b>${pct(d.occupied['33m2'])}</b></div><div><small>1주차 가동</small><b>${pct(d.occ7d['33m2'])}</b></div><div><small>90일 예약</small><b>${pct(d.rate90['33m2'])}</b></div><div><small>월 요금</small><b>${manwon(d.fee['33m2'])}</b></div></div>
       <p class="muted" style="margin:8px 0 0">삼삼엠투 ${d.supply['33m2']} · 직방 ${d.supply.zbstay} · 엔코 ${d.supply.enko}${d.reviews12m != null ? ` · 12개월 리뷰 ${d.reviews12m}` : ''}</p></div>`).join('')}`;
 }
 function renderMarketDong() {
   const M = S.market, d = M.dongs.find(x => x.id === S.marketDong);
   if (!d) { S.marketDong = null; return renderMarket(); }
+  const T = M.trend, s = T && T.days >= 7 ? T.dongs[d.id] : null;
   const sorters = { fee: (a, b) => (a.monthly_fee || 0) - (b.monthly_fee || 0), occ: (a, b) => (b.booked_90d || 0) - (a.booked_90d || 0), reviews: (a, b) => ((b.reviews_12m ?? b.bookings) || 0) - ((a.reviews_12m ?? a.bookings) || 0) };
   const ls = M.listings.filter(l => l.adm_cd2 === d.id).sort(sorters[S.marketSort]);
   const stay = (l) => l.booked_7d == null ? '<span class="badge gray">확인불가</span>' : l.occupied ? `<span class="badge green">입주중</span> <span class="muted">~${fmtMD(l.next_available)}</span>` : `<span class="badge blue">공실</span> <span class="muted">${l.next_available ? fmtMD(l.next_available) + '부터' : ''}</span>`;
   return `<button class="back" data-act="market-back">‹ ${esc(d.sgg.replace('창원시', '창원 '))}</button>
     <div class="card"><div class="row"><b style="font-size:18px">${esc(d.name)}</b><b>${d.supply.total}실</b></div>
       <div class="stats"><div><small>입주중</small><b>${pct(d.occupied['33m2'])}</b></div><div><small>1주차 가동</small><b>${pct(d.occ7d['33m2'])}</b></div><div><small>90일 예약</small><b>${pct(d.rate90['33m2'])}</b></div><div><small>월 요금</small><b>${manwon(d.fee['33m2'])}</b></div></div></div>
+    ${s ? trendCard(s) + `<div class="card scroll"><table class="t"><tr><th>주</th><th>가동률</th><th>차단 포함</th><th>매물</th><th>중위 요금</th></tr>${s.weeks.map(w =>
+      `<tr><td>${w.week.slice(5)}${w.partial ? '*' : ''}</td><td>${pct(w.occ)}</td><td>${pct(w.occIncl)}</td><td>${w.supply ?? '–'}</td><td>${manwon(w.fee)}</td></tr>`).join('')}</table><p class="muted" style="margin:6px 0 0">* 7일이 다 안 찬 주</p></div>` : ''}
     <div style="display:flex;justify-content:flex-end;margin-top:10px"><div class="seg">${[['fee', '요금순'], ['occ', '예약 많은순'], ['reviews', '리뷰순']].map(([k, v]) => `<button class="${S.marketSort === k ? 'on' : ''}" data-act="market-sort" data-v="${k}">${v}</button>`).join('')}</div></div>
     <div class="card list">${ls.map(l => `<a class="item" href="${esc(l.url)}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">
       <div class="main"><b><span class="badge ${PBADGE[l.platform]}">${PLATFORMS[l.platform]}</span> ${esc(l.name)}</b>
@@ -622,6 +647,7 @@ document.addEventListener('click', async (e) => {
     case 'market-dong': S.marketDong = id; render(); window.scrollTo(0, 0); break;
     case 'market-back': S.marketDong = null; render(); break;
     case 'market-sort': S.marketSort = el.dataset.v; render(); break;
+    case 'market-dong-sort': S.marketDongSort = el.dataset.v; render(); break;
     case 'logout': closeSheet(); store.signOut(); break;
   }
 });

@@ -1,4 +1,4 @@
-const VERSION = 'v8';
+const VERSION = 'v9';
 const SHELL = ['./', './index.html', './app.js', './store.js', './calc.js', './firebase-config.js', './manifest.json',
   './icons/icon-192.png', './icons/icon-512.png'];
 
