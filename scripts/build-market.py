@@ -1,9 +1,17 @@
 """stay-market-scan 집계(listings.json, dong_metrics.json)에서 김해·창원 매물과 동별 예약 지표만 추려 market.json 을 만든다.
-사용: python scripts/build-market.py <stay-market-scan 경로 또는 listings.json 이 있는 집계 폴더>"""
-import json, sys
+사용: python scripts/build-market.py <stay-market-scan 경로 또는 listings.json 이 있는 집계 폴더> [--trend trend.json] [--status status.json]
+--trend/--status 는 daily.py 가 넘긴다. 없으면 기존처럼 asof/dongs/listings 만 쓴다."""
+import argparse
+import json
 from pathlib import Path
 
-src = Path(sys.argv[1])
+p = argparse.ArgumentParser()
+p.add_argument("src")
+p.add_argument("--trend", default=None)
+p.add_argument("--status", default=None)
+a = p.parse_args()
+
+src = Path(a.src)
 if not (src / "listings.json").exists():
     src = src / "data" / "agg"
 out = Path(__file__).resolve().parent.parent / "market.json"
@@ -33,5 +41,12 @@ for l in rows:
         if isinstance(l.get(k), float):
             l[k] = round(l[k])
 data = {"asof": metrics["meta"]["asof"], "dongs": sorted(dongs.values(), key=lambda d: -d["supply"]["total"]), "listings": rows}
+if a.trend:
+    data["trend"] = json.load(open(a.trend, encoding="utf-8"))
+if a.status:
+    st = json.load(open(a.status, encoding="utf-8"))
+    data["collect"] = {"lastRun": st.get("lastRun"), "lastSuccess": st.get("lastSuccess"), "error": st.get("error"),
+                       "failed": [k for k, v in (st.get("steps") or {}).items() if not v.get("ok")]}
 json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
-print(f"{out.name}: dongs {len(dongs)}, listings {len(rows)}, {out.stat().st_size // 1024} KB, asof {data['asof']}")
+extra = (" trend" if a.trend else "") + (" collect" if a.status else "")
+print(f"{out.name}: dongs {len(dongs)}, listings {len(rows)}, {out.stat().st_size // 1024} KB, asof {data['asof']}{extra}")
