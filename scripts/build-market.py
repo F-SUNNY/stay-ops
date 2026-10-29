@@ -43,6 +43,7 @@ for l in rows:
 data = {"asof": metrics["meta"]["asof"], "dongs": sorted(dongs.values(), key=lambda d: -d["supply"]["total"]), "listings": rows}
 if a.trend:
     data["trend"] = json.load(open(a.trend, encoding="utf-8"))
+    data["trend"]["dongs"] = {k: v for k, v in data["trend"]["dongs"].items() if k in dongs}
 if a.status:
     st = json.load(open(a.status, encoding="utf-8"))
     data["collect"] = {"lastRun": st.get("lastRun"), "lastSuccess": st.get("lastSuccess"), "error": st.get("error"),
